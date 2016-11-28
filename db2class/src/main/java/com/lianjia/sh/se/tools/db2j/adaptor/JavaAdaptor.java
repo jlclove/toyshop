@@ -17,6 +17,7 @@ public class JavaAdaptor {
       case "date":
       case "datetime":
       case "datetime2":
+      case "smalldatetime":
         return true;
       default:
         return false;
@@ -35,6 +36,7 @@ public class JavaAdaptor {
    */
   public static boolean hasMSSQLBigPrecision(String mssqlType) {
     switch (mssqlType.toLowerCase()) {
+      case "money":
       case "decimal":
       case "numeric":
         return true;

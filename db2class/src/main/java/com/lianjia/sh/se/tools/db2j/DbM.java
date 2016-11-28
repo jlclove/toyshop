@@ -23,7 +23,7 @@ public class DbM {
 
   public static void main(String[] args) throws SQLException {
     System.out.println("—————————————————————————————————————————————————\n");
-    System.out.println("　　　　　【上海链家SE】数据库对象导出工具 Ver1.1.0");
+    System.out.println("　　　　　【上海链家SE】数据库对象导出工具 【Ver1.1.2】");
     System.out.println("                        Author:Jail Hu\n");
     System.out.println("—————————————————————————————————————————————————");
 
