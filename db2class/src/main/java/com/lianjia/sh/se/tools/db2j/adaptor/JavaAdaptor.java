@@ -57,6 +57,7 @@ public class JavaAdaptor {
       case "varchar":
       case "nvarchar":
       case "char":
+      case "text":
       case "ntext":
       case "nchar":
         return "String";
