@@ -28,7 +28,7 @@ public class ClassGenerator {
 
     String path = DbM.class.getProtectionDomain().getCodeSource().getLocation().getPath();
     path = path.substring(0, path.lastIndexOf("/"));
-    String fileName = path + "/" + className + ".java";
+    String fileName = path + "/output/" + className + ".java";
 //    System.out.println("----+========" + fileName);
     try (OutputStreamWriter fw = new OutputStreamWriter(new FileOutputStream(fileName),"UTF-8")) {
       fw.write("package " + packageName + ";\n\n");
