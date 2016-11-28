@@ -1,5 +1,6 @@
 package com.lianjia.sh.se.tools.db2j;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -29,8 +30,14 @@ public class ClassGenerator {
     String path = DbM.class.getProtectionDomain().getCodeSource().getLocation().getPath();
     path = path.substring(0, path.lastIndexOf("/"));
     String fileName = path + "/output/" + className + ".java";
-//    System.out.println("----+========" + fileName);
-    try (OutputStreamWriter fw = new OutputStreamWriter(new FileOutputStream(fileName),"UTF-8")) {
+
+    File file = new File(fileName);
+    if (!file.getParentFile().exists()) {
+      file.getParentFile().mkdirs();
+    }
+
+    // System.out.println("----+========" + fileName);
+    try (OutputStreamWriter fw = new OutputStreamWriter(new FileOutputStream(fileName), "UTF-8")) {
       fw.write("package " + packageName + ";\n\n");
 
       if (columnList.stream().anyMatch(column -> JavaAdaptor.hasMSSQLDate(column.getColType()))) {
