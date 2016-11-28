@@ -21,10 +21,13 @@ public class DbM {
 
   static Scanner scanner = new Scanner(System.in);
 
+  static String version = "1.1.3";
+  static String author = "Jail Hu";
+
   public static void main(String[] args) throws SQLException {
     System.out.println("—————————————————————————————————————————————————\n");
-    System.out.println("　　　　　【上海链家SE】数据库对象导出工具 【Ver1.1.2】");
-    System.out.println("                        Author:Jail Hu\n");
+    System.out.println("　　　　　【上海链家SE】数据库对象导出工具 【Ver" + version + "】");
+    System.out.println("                        Author:" + author + "\n");
     System.out.println("—————————————————————————————————————————————————");
 
     String dbUrl = getInput("请输入需要连接的数据库地址：");
@@ -218,8 +221,9 @@ public class DbM {
       } else {
         try {
           String fileName = ClassGenerator.javaClassGenerate(currentTable.getName(), packageName, authorName, columnList);
+          System.out
+              .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
           currentTable = tableList.get(++tableIndex);
-          System.out.println("进度： [" + tableIndex + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
           columnList.clear();
         } catch (IOException e) {
           System.err.println(
