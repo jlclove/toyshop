@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.lianjia.sh.se.tools.db2j.DbM.Column;
+import com.lianjia.sh.se.tools.db2j.DbM.LocalTable;
 import com.lianjia.sh.se.tools.db2j.adaptor.JavaAdaptor;
 
 public class ClassGenerator {
@@ -20,16 +21,18 @@ public class ClassGenerator {
     List<Column> columnList = new ArrayList<>();
     columnList.add(new Column("id", "bigint", false, "主键ID", null));
     columnList.add(new Column("old", "bit", true, "是否老年", "1"));
-    javaClassGenerate("mail", "com.lj.test", "胡大叔", columnList);
+    javaClassGenerate(new LocalTable(0, "mail", "测试表"), "com.lj.test", "胡大叔", columnList);
+    
+    System.out.println("生成完成");
   }
 
-  public static String javaClassGenerate(String className, String packageName, String authorName, List<Column> columnList)
+  public static String javaClassGenerate(LocalTable table, String packageName, String authorName, List<Column> columnList)
       throws FileNotFoundException, IOException {
     LocalDateTime dt = LocalDateTime.now();
 
     String path = DbM.class.getProtectionDomain().getCodeSource().getLocation().getPath();
     path = path.substring(0, path.lastIndexOf("/"));
-    String fileName = path + "/output/" + className + ".java";
+    String fileName = path + "/output/" + table.getName() + ".java";
 
     File file = new File(fileName);
     if (!file.getParentFile().exists()) {
@@ -48,13 +51,16 @@ public class ClassGenerator {
       }
       fw.write("\n\n");
       fw.write("/**\n");
-      fw.write(" * " + className + "\n");
+      fw.write(" * " + table.getName() + "\n");
+      if (table.getComment() != null && table.getComment().length() > 0) {
+        fw.write(" * " + table.getComment() + "\n");
+      }
       fw.write(" * \n");
       fw.write(" * @author " + authorName + "\n");
       fw.write(" * @createAt " + dt.format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss")) + "\n");
       fw.write(" * @Copyright (c) " + dt.getYear() + ", Lianjia Group All Rights Reserved.\n");
       fw.write(" */\n");
-      fw.write("public class " + className + "{\n\n");
+      fw.write("public class " + table.getName() + "{\n\n");
 
       columnList.forEach(column -> {
         try {
@@ -100,7 +106,7 @@ public class ClassGenerator {
       // toString
       fw.write("  @Override\n");
       fw.write("  public String toString() {\n");
-      fw.write("    return \"" + className + " [");
+      fw.write("    return \"" + table.getName() + " [");
       for (int i = 0; i < columnList.size(); i++) {
         fw.write(columnList.get(i).getName() + "=\"+ " + columnList.get(i).getName() + " +\"");
         if (i < columnList.size() - 1) {

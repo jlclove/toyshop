@@ -21,7 +21,7 @@ public class DbM {
 
   static Scanner scanner = new Scanner(System.in);
 
-  static String version = "1.1.3";
+  static String version = "1.2.0";
   static String author = "Jail Hu";
 
   public static void main(String[] args) throws SQLException {
@@ -135,13 +135,14 @@ public class DbM {
 
   private static String tableOperate(Connection conn, String dbName) throws SQLException {
     Statement stmt = conn.createStatement();
-    stmt.execute("SELECT id,name FROM " + dbName + ".sys.SysObjects Where XType='U' ORDER BY Name");
+    stmt.execute("SELECT s.id,s.name,p.value as comment FROM " + dbName + ".sys.SysObjects as s left join " + dbName
+        + ".sys.extended_properties as p on s.id = p.major_id and p.minor_id=0 Where s.XType='U' ORDER BY s.Name");
     ResultSet set = stmt.getResultSet();
     System.out.println("[table list]");
     List<LocalTable> tableList = new ArrayList<>();
-    tableList.add(new LocalTable(0, "整个[" + dbName + "]库"));
+    tableList.add(new LocalTable(0, "整个[" + dbName + "]库", ""));
     while (set.next()) {
-      tableList.add(new LocalTable(set.getLong(1), set.getString(2)));
+      tableList.add(new LocalTable(set.getLong(1), set.getString(2), set.getString(3)));
     }
     for (int i = 0; i < tableList.size(); i++) {
       System.out.println(" " + i + ": " + tableList.get(i).getName());
@@ -220,7 +221,7 @@ public class DbM {
         columnList.add(new Column(set.getString(2), set.getString(3), set.getBoolean(4), set.getString(5), set.getString(6)));
       } else {
         try {
-          String fileName = ClassGenerator.javaClassGenerate(currentTable.getName(), packageName, authorName, columnList);
+          String fileName = ClassGenerator.javaClassGenerate(currentTable, packageName, authorName, columnList);
           System.out
               .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
           currentTable = tableList.get(++tableIndex);
@@ -233,7 +234,7 @@ public class DbM {
     }
     if (columnList.size() > 0) {
       try {
-        String fileName = ClassGenerator.javaClassGenerate(currentTable.getName(), packageName, authorName, columnList);
+        String fileName = ClassGenerator.javaClassGenerate(currentTable, packageName, authorName, columnList);
         System.out
             .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
       } catch (IOException e) {
@@ -286,6 +287,10 @@ public class DbM {
      * 表名
      */
     private String name;
+    /**
+     * 表注释
+     */
+    private String comment;
 
     /**
      * 获得 id
@@ -323,6 +328,22 @@ public class DbM {
       this.name = name;
     }
 
+    /**
+     * @return the 表注释
+     */
+    public String getComment() {
+      return this.comment;
+    }
+
+    /**
+     * 设置 表注释
+     * 
+     * @param String to set
+     */
+    public void setComment(String comment) {
+      this.comment = comment;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -335,9 +356,10 @@ public class DbM {
 
     public LocalTable() {}
 
-    public LocalTable(long id, String name) {
+    public LocalTable(long id, String name, String comment) {
       this.id = id;
       this.name = name;
+      this.comment = comment;
     }
   }
 
