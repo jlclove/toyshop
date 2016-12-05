@@ -21,18 +21,18 @@ public class ClassGenerator {
     List<Column> columnList = new ArrayList<>();
     columnList.add(new Column("id", "bigint", false, "主键ID", null));
     columnList.add(new Column("old", "bit", true, "是否老年", "1"));
-    javaClassGenerate(new LocalTable(0, "mail", "测试表"), "com.lj.test", "胡大叔", columnList);
-    
+    javaClassGenerate("", new LocalTable(0, "mail", "测试表"), "com.lj.test", "胡大叔", columnList);
+
     System.out.println("生成完成");
   }
 
-  public static String javaClassGenerate(LocalTable table, String packageName, String authorName, List<Column> columnList)
+  public static String javaClassGenerate(String className, LocalTable table, String packageName, String authorName, List<Column> columnList)
       throws FileNotFoundException, IOException {
     LocalDateTime dt = LocalDateTime.now();
 
     String path = DbM.class.getProtectionDomain().getCodeSource().getLocation().getPath();
     path = path.substring(0, path.lastIndexOf("/"));
-    String fileName = path + "/output/" + table.getName() + ".java";
+    String fileName = path + "/output/" + className + ".java";
 
     File file = new File(fileName);
     if (!file.getParentFile().exists()) {
@@ -60,7 +60,7 @@ public class ClassGenerator {
       fw.write(" * @createAt " + dt.format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss")) + "\n");
       fw.write(" * @Copyright (c) " + dt.getYear() + ", Lianjia Group All Rights Reserved.\n");
       fw.write(" */\n");
-      fw.write("public class " + table.getName() + "{\n\n");
+      fw.write("public class " + className + "{\n\n");
 
       columnList.forEach(column -> {
         try {

@@ -13,16 +13,30 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Scanner;
-import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class DbM {
 
   static Scanner scanner = new Scanner(System.in);
 
-  static String version = "1.2.0";
+  static String version = "1.3.0";
   static String author = "Jail Hu";
+
+  // 表名正则
+  static String tableNamePatt;
+  // 表名正则提取下标
+  static int tableNamePattIndex;
+  static int tableNamePattTotal = 0;
+  // 类名连接符
+  static String nameSplit;
+  // 类名转换方式， 0：原始 1：驼峰
+  static int namedType = -1;
+
 
   public static void main(String[] args) throws SQLException {
     System.out.println("—————————————————————————————————————————————————\n");
@@ -60,25 +74,15 @@ public class DbM {
     stmt.close();
     System.out.println("-----------------------");
 
-    ScannerInput si = new ScannerInput() {
-
+    ScannerInput<Integer> si = new ScannerInput<Integer>() {
       @Override
-      public int getInputIndex(String input) throws NumberFormatException {
-        return Integer.parseInt(input);
-      }
-
-      @Override
-      public int getLegalIndex(int index) throws Exception {
+      public Integer getLegalInput(String input) throws Exception {
+        int index = Integer.parseInt(input);
         if (dbMap.containsKey(index)) {
           return index;
         } else {
           throw new Exception();
         }
-      }
-
-      @Override
-      public int getRetryCount() {
-        return 3;
       }
 
       @Override
@@ -91,51 +95,52 @@ public class DbM {
         return "---->>数据库序号输入错误";
       }
     };
-    String dbName = dbMap.get(chooseSource.apply(si));
+    String dbName = dbMap.get(si.get());
     System.out.println("您选择的数据库为：" + dbName + "\n");
     return dbName;
   }
 
-  static Function<ScannerInput, Integer> chooseSource = new Function<ScannerInput, Integer>() {
 
-    @Override
-    public Integer apply(ScannerInput t) {
-      return this.get(t, 0);
+  static interface ScannerInput<R> extends Supplier<R> {
+
+    default int getRetryCount() {
+      return 3;
     }
 
-    private Integer get(ScannerInput t, int i) {
-      String input = getInput(t.getWelcomeMsg());
-      try {
-        int index = t.getInputIndex(input);
-        return t.getLegalIndex(index);
-      } catch (Exception e) {
-        if (i < t.getRetryCount()) {
-          System.err.println(t.getErrorMsg() + " 请重试 " + (i + 1) + "/" + t.getRetryCount() + "\n");
-          i++;
-          return get(t, i);
-        } else {
-          throw new NumberFormatException((t.getRetryCount() > 0 ? "重试结束，" : "") + "参数输入有误，程序异常跳出");
-        }
-      }
-    }
-  };
-
-  static interface ScannerInput {
-
-    int getRetryCount();
-
-    int getInputIndex(String input) throws NumberFormatException;
-
-    int getLegalIndex(int index) throws Exception;
+    R getLegalInput(String input) throws Exception;
 
     String getWelcomeMsg();
 
     String getErrorMsg();
+
+    /*
+     * @see java.util.function.Supplier#get()
+     */
+    @Override
+    default R get() {
+      return this.get(0);
+    }
+
+    default R get(int i) {
+      String input = getInput(this.getWelcomeMsg());
+      try {
+        return this.getLegalInput(input);
+      } catch (Exception e) {
+        if (i < this.getRetryCount()) {
+          System.err.println(this.getErrorMsg() + " 请重试 " + (i + 1) + "/" + this.getRetryCount() + "\n");
+          i++;
+          return get(i);
+        } else {
+          throw new NumberFormatException((this.getRetryCount() > 0 ? "重试结束，" : "") + "参数输入有误，程序异常跳出");
+        }
+      }
+    }
   }
 
   private static String tableOperate(Connection conn, String dbName) throws SQLException {
     Statement stmt = conn.createStatement();
-    stmt.execute("SELECT s.id,s.name,p.value as comment FROM " + dbName + ".sys.SysObjects as s left join " + dbName
+    stmt.execute("SELECT s.id,cast(s.name as nvarchar(50)) as name,cast(p.value as nvarchar(200)) as comment FROM " + dbName
+        + ".sys.SysObjects as s left join " + dbName
         + ".sys.extended_properties as p on s.id = p.major_id and p.minor_id=0 Where s.XType='U' ORDER BY s.Name");
     ResultSet set = stmt.getResultSet();
     System.out.println("[table list]");
@@ -150,21 +155,11 @@ public class DbM {
     set.close();
     stmt.close();
     System.out.println("-----------------------");
-    ScannerInput si = new ScannerInput() {
+    ScannerInput<Integer> si = new ScannerInput<Integer>() {
 
       @Override
       public String getWelcomeMsg() {
         return "请选择需要导出的表序号：";
-      }
-
-      @Override
-      public int getRetryCount() {
-        return 3;
-      }
-
-      @Override
-      public int getInputIndex(String input) throws NumberFormatException {
-        return Integer.parseInt(input);
       }
 
       @Override
@@ -173,7 +168,8 @@ public class DbM {
       }
 
       @Override
-      public int getLegalIndex(int index) throws Exception {
+      public Integer getLegalInput(String input) throws Exception {
+        int index = Integer.parseInt(input);
         if (index >= 0 && index < tableList.size()) {
           return index;
         } else {
@@ -181,7 +177,10 @@ public class DbM {
         }
       }
     };
-    int indexChoose = chooseSource.apply(si);
+    tableNameExtract();
+    nameTypeSelect();
+    
+    int indexChoose = si.get();
     if (indexChoose == 0) {
       exportClass(conn, dbName, tableList.subList(1, tableList.size()));
     } else {
@@ -190,15 +189,84 @@ public class DbM {
     return dbName;
   }
 
+  /**
+   * 提取表名相关的正则
+   * 
+   * @summary
+   * @author Jail Hu
+   * @version v1
+   * @since 2016年12月5日 下午7:50:22
+   */
+  private static void tableNameExtract() {
+    tableNamePatt = getInput("请输入对表名进行类名提取的正则表达式（直接回车可跳过此步骤）：");
+    if (tableNamePatt != null && !"".equals(tableNamePatt)) {
+      Pattern patt = Pattern.compile("(\\(\\S*?\\))");
+      Matcher matcher = patt.matcher(tableNamePatt);
+      while (matcher.find()) {
+        tableNamePattTotal++;
+      }
+      if (tableNamePattTotal > 0) {
+        ScannerInput<Integer> tableNamePattIndexScanner = new ScannerInput<Integer>() {
+          @Override
+          public Integer getLegalInput(String input) throws Exception {
+            int index = Integer.parseInt(input);
+            if (index >= 1 && index <= tableNamePattTotal) {
+              return index;
+            } else {
+              throw new Exception();
+            }
+          }
+
+          @Override
+          public String getWelcomeMsg() {
+            return "请输入正则表达式提取下标，从[1]开始：";
+          }
+
+          @Override
+          public String getErrorMsg() {
+            return "正则下标输入错误，选择范围 [1] - [" + tableNamePattTotal + "]";
+          }
+        };
+        tableNamePattIndex = tableNamePattIndexScanner.get();
+      }
+    }
+  }
+
+  private static void nameTypeSelect() {
+    ScannerInput<Integer> namedTypeScanner = new ScannerInput<Integer>() {
+      @Override
+      public Integer getLegalInput(String input) throws Exception {
+        int index = Integer.parseInt(input);
+        return index;
+      }
+
+      @Override
+      public String getWelcomeMsg() {
+        return "请输入您需要的类名格式化方式（0：原始  1：驼峰）：";
+      }
+
+      @Override
+      public String getErrorMsg() {
+        return "类名格式化方式输入错误（0：原始  1：驼峰）";
+      }
+    };
+
+    namedType = namedTypeScanner.get();
+
+    if (namedType == 1) {
+      nameSplit = getInput("请输入您类名的单词分隔符：");
+    }
+  }
+
   private static void exportClass(Connection conn, String dbName, LocalTable table) throws SQLException {
     exportClass(conn, dbName, Arrays.asList(table));
   }
 
   private static void exportClass(Connection conn, String dbName, List<LocalTable> tableList) throws SQLException {
     String packageName = getInput("请输入您类文件的包名：");
-    System.out.println("您输入的类文件包名为：" + packageName + "\n");
+    // System.out.println("您输入的类文件包名为：" + packageName + "\n");
     String authorName = getInput("请输入您的大名：");
-    System.out.println("您的大名为：" + authorName + "\n");
+    // System.out.println("您的大名为：" + authorName + "\n");
 
     tableList.sort((t1, t2) -> ((Long) t1.getId()).compareTo(t2.getId()));
 
@@ -215,13 +283,15 @@ public class DbM {
     int tableIndex = 0;
     LocalTable currentTable = tableList.get(tableIndex);
     System.out.println("开始为您导出java脚本...");
+
     List<Column> columnList = new ArrayList<>();
     while (set.next()) {
       if (currentTable.getId() == set.getLong(1)) {
         columnList.add(new Column(set.getString(2), set.getString(3), set.getBoolean(4), set.getString(5), set.getString(6)));
       } else {
         try {
-          String fileName = ClassGenerator.javaClassGenerate(currentTable, packageName, authorName, columnList);
+          String fileName = ClassGenerator.javaClassGenerate(getFormatedClassName(currentTable.getName()), currentTable, packageName,
+              authorName, columnList);
           System.out
               .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
           currentTable = tableList.get(++tableIndex);
@@ -234,7 +304,8 @@ public class DbM {
     }
     if (columnList.size() > 0) {
       try {
-        String fileName = ClassGenerator.javaClassGenerate(currentTable, packageName, authorName, columnList);
+        String fileName = ClassGenerator.javaClassGenerate(getFormatedClassName(currentTable.getName()), currentTable, packageName,
+            authorName, columnList);
         System.out
             .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
       } catch (IOException e) {
@@ -247,9 +318,33 @@ public class DbM {
     stmt.close();
   }
 
+  private static String getFormatedClassName(String tableName) {
+    String className = tableName;
+    if (tableNamePatt != null && !"".equals(tableNamePatt)) {
+      Pattern patt = Pattern.compile(tableNamePatt);
+      Matcher matcher = patt.matcher(tableName);
+      if (matcher.matches()) {
+        className = matcher.group(tableNamePattIndex);
+      }
+    }
+    Objects.nonNull(className);
+
+    if (namedType == 0) {
+      return className;
+    } else if (namedType == 1) {
+      StringBuilder sb = new StringBuilder();
+      for (String word : className.split(nameSplit)) {
+        sb.append(word.substring(0, 1).toUpperCase());
+        sb.append(word.substring(1, word.length()));
+      }
+      return sb.toString();
+    }
+    return className;
+  }
+
   private static String getInput(String label) {
     System.out.print(label);
-    String str = scanner.next();
+    String str = scanner.nextLine();
     return str;
   }
 
