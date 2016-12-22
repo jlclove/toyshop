@@ -11,10 +11,14 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,7 +28,7 @@ public class DbM {
 
   static Scanner scanner = new Scanner(System.in);
 
-  static String version = "1.3.0";
+  static String version = "1.3.1";
   static String author = "Jail Hu";
 
   // 表名正则
@@ -179,7 +183,7 @@ public class DbM {
     };
     tableNameExtract();
     nameTypeSelect();
-    
+
     int indexChoose = si.get();
     if (indexChoose == 0) {
       exportClass(conn, dbName, tableList.subList(1, tableList.size()));
@@ -279,38 +283,30 @@ public class DbM {
             + dbName + ".sys.extended_properties as p on c.id = p.major_id  and c.colid = p.minor_id left join " + dbName
             + ".sys.syscomments e on c.cdefault=e.id  " + "where c.id in (" + tableIds + ") order by c.id ");
     ResultSet set = stmt.getResultSet();
-
-    int tableIndex = 0;
-    LocalTable currentTable = tableList.get(tableIndex);
     System.out.println("开始为您导出java脚本...");
-
-    List<Column> columnList = new ArrayList<>();
+    Map<Long, List<Column>> map = new HashMap<>();
     while (set.next()) {
-      if (currentTable.getId() == set.getLong(1)) {
-        columnList.add(new Column(set.getString(2), set.getString(3), set.getBoolean(4), set.getString(5), set.getString(6)));
-      } else {
-        try {
-          String fileName = ClassGenerator.javaClassGenerate(getFormatedClassName(currentTable.getName()), currentTable, packageName,
-              authorName, columnList);
-          System.out
-              .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
-          currentTable = tableList.get(++tableIndex);
-          columnList.clear();
-        } catch (IOException e) {
-          System.err.println(
-              "进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出失败，原因【" + e.getMessage() + "】...");
-        }
+      if (!map.containsKey(set.getLong(1))) {
+        map.put(set.getLong(1), new ArrayList<>());
       }
+      map.get(set.getLong(1)).add(new Column(set.getString(2), set.getString(3), set.getBoolean(4), set.getString(5), set.getString(6)));
     }
-    if (columnList.size() > 0) {
+    Set<Entry<Long, List<Column>>> sets = map.entrySet();
+    Iterator<Entry<Long, List<Column>>> iterators = sets.iterator();
+    int i = 1;
+    while (iterators.hasNext()) {
+      Entry<Long, List<Column>> entry = iterators.next();
+      Optional<LocalTable> tableO = tableList.stream().filter((t) -> t.getId() == entry.getKey()).findAny();
+      if (!tableO.isPresent()) {
+        throw new IllegalStateException("故障===>表数据与字段数据不完全匹配");
+      }
       try {
-        String fileName = ClassGenerator.javaClassGenerate(getFormatedClassName(currentTable.getName()), currentTable, packageName,
-            authorName, columnList);
-        System.out
-            .println("进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出完成 --->" + fileName + ";");
+        String fileName = ClassGenerator.javaClassGenerate(getFormatedClassName(tableO.get().getName()), tableO.get(), packageName,
+            authorName, entry.getValue());
+        System.out.println("进度： [" + (i++) + "/" + tableList.size() + "] " + tableO.get().getName() + " 导出完成 --->" + fileName + ";");
       } catch (IOException e) {
-        System.err.println(
-            "进度： [" + (tableIndex + 1) + "/" + tableList.size() + "] " + currentTable.getName() + " 导出失败，原因【" + e.getMessage() + "】...");
+        System.err
+            .println("进度： [" + (i++) + "/" + tableList.size() + "] " + tableO.get().getName() + " 导出失败，原因【" + e.getMessage() + "】...");
       }
     }
     System.out.println("恭喜，全部导出完毕!");
